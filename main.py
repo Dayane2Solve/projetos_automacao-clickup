@@ -7,6 +7,7 @@
 import requests
 import json
 from openpyxl import Workbook
+from openpyxl import load_workbook
 from datetime import datetime
 
 team_id = "3075996"
@@ -49,8 +50,7 @@ custo_funcionario = {
     "Waldelicio Junior": 93.43,
     "Willian Pacheco Silva": 33.46,
 }
-data_hoje = datetime.now()
-data_formatada = data_hoje.strftime("%Y-%m-%d")
+data_hoje = datetime.now().strftime("%Y-%m-%d")
 space_exclude = ["90131034562", "90131103749", "90131210570", "90131669969"]
 # id: 90131034562 nome: Marketing
 # id: 90131103749 nome: Comercial
@@ -90,111 +90,69 @@ response["access_token"] = (
     "3138343_6fada438d889343a074632a34b7c61afcff6e35c1bc63ba13127367756e4d2b2"
 )
 
-url = f"https://api.clickup.com/api/v2/team/{team_id}/space?archived=false"
 headers = {"Authorization": f'Bearer {response["access_token"]}'}
 
-try:
+def obter_dados_api(url):
+    """Função para realizar requisição à API e retornar dados em JSON."""
     response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        spaces = response.json()["spaces"]
-        for space in spaces:
-            workbook = Workbook()
-            space_id = space["id"]
-            if space_id in space_exclude:
+    return response.json() if response.status_code == 200 else None
+
+try:
+    spaces = obter_dados_api(f"https://api.clickup.com/api/v2/team/{team_id}/space?archived=false")["spaces"]
+
+    for space in spaces:
+        if space["id"] in space_exclude:
+            continue
+
+        space_name = space["name"]
+
+        folders = obter_dados_api(f"https://api.clickup.com/api/v2/space/{space['id']}/folder?archived=false")["folders"]
+
+        for folder in folders:
+            if folder["id"] in folder_exclude:
                 continue
-            space_name = space["name"]
-            url = (
-                f"https://api.clickup.com/api/v2/space/{space_id}/folder?archived=false"
-            )
-            response = requests.get(url, headers=headers)
+            
+            lists = obter_dados_api(f"https://api.clickup.com/api/v2/folder/{folder['id']}/list?archived=false")["lists"]
+            if not lists:
+                continue
 
-            if response.status_code == 200:
-                folders = response.json()["folders"]
-                for folder in folders:
-                    folder_id = folder["id"]
-                    if folder_id in folder_exclude:
-                        continue
-
-                    url = f"https://api.clickup.com/api/v2/folder/{folder_id}/list?archived=false"
-                    response = requests.get(url, headers=headers)
-                    if response.status_code == 200:
-                        lists = response.json()["lists"]
-                        if not lists:
-                            continue
-                        aba = workbook.create_sheet(
-                            title=f'{lists[0]["folder"]["name"]}'
-                        )
-                        aba.append(header)
-                        for list in lists:
-                            list_id = list["id"]
-                            print(list["name"])
-                            url = f"https://api.clickup.com/api/v2/list/{list_id}/task?archived=false&include_closed=true"
-                            response = requests.get(url, headers=headers)
-                            if response.status_code == 200:
-                                tasks = response.json()["tasks"]
-                                for task in tasks:
-                                    responsaveis = ";".join(
-                                        assignee["username"]
-                                        for assignee in task["assignees"]
-                                    )
-                                    nomes_lista = responsaveis.split(";")
-                                    custos_presentes = [
-                                        custo_funcionario[nome]
-                                        for nome in nomes_lista
-                                        if nome in custo_funcionario
-                                    ]
-                                    custo = (
-                                        max(custos_presentes) if custos_presentes else 0
-                                    )
-                                    time_estimate = (
-                                        task.get("time_estimate") or 0
-                                    ) / 3600000
-                                    cost_estimate = time_estimate * custo
-                                    time_spent = task.get("time_spent", 0) / 3600000
-                                    cost_spent = time_spent * custo
-                                    percent_concluido = (
-                                        1
-                                        if task["status"]["status"].lower()
-                                        == "concluído" or task["status"]["status"].lower()
-                                        == "fechado" 
-                                        else 0
-                                    )
-
-                                    # Adiciona os dados da tarefa à planilha
-                                    aba.append(
-                                        [
-                                            task["list"]["name"],
-                                            task["name"],
-                                            responsaveis,
-                                            time_estimate,
-                                            cost_estimate,
-                                            time_spent,
-                                            cost_spent,
-                                            task["status"]["status"],
-                                            percent_concluido,
-                                        ]
-                                    )
-
-                            else:
-                                print(
-                                    f"Erro ao obter listas da tarefa: código {response.status_code}"
-                                )
-
-                    else:
-                        print(
-                            f"Erro ao obter listas de pastas: código {response.status_code}"
-                        )
-                    
+            caminho_arquivo = f"Overview_IoTTruck White Martins.xlsx"
+            workbook = load_workbook(caminho_arquivo)
+            # Seleciona a aba "Tarefas Gerais"
+            if "Tarefas Gerais" in workbook.sheetnames:
+                aba = workbook["Tarefas Gerais"]
             else:
-                print(f"Erro ao obter pastas do espaço: código {response.status_code}")
-            
-            workbook.remove(workbook["Sheet"])
-            workbook.save(f"{data_formatada}_{space_name}.xlsx")
-            
+                raise ValueError("A aba 'Tarefas Gerais' não existe na planilha.")
 
+            aba.delete_rows(1, aba.max_row)
+            aba.append(header)
 
-    else:
-        print(f"Erro ao obter espaços: código {response.status_code}")
+            for lista in lists:
+                tasks = obter_dados_api(f"https://api.clickup.com/api/v2/list/{lista['id']}/task?archived=false&include_closed=true")["tasks"]
+                if not tasks:
+                    continue
+                
+                for task in tasks:
+                    responsaveis = ";".join(assignee["username"] for assignee in task["assignees"])
+                    # custos_presentes = [custo_funcionario.get(nome, 0) for nome in responsaveis.split(";")]
+                    # custo = max(custos_presentes, default=0)
+                    custo = 0
+                    custo += sum(custo_funcionario.get(nome, 0) for nome in responsaveis.split(";"))
+                    print(custo)
+
+                    time_estimate = (task.get("time_estimate") or 0) / 3600000
+                    cost_estimate = time_estimate * custo
+                    time_spent = task.get("time_spent", 0) / 3600000
+                    cost_spent = time_spent * custo
+                    percent_concluido = 1 if task["status"]["status"].lower() in {"concluídas", "fechadas"} else 0
+
+                    # Adiciona os dados da tarefa à planilha
+                    aba.append([
+                        task["list"]["name"], task["name"], responsaveis,
+                        time_estimate, cost_estimate, time_spent,
+                        cost_spent, task["status"]["status"], percent_concluido
+                    ])
+        workbook.save(caminho_arquivo)
 
 except requests.RequestException as e:
     print(f"Erro de requisição: {e}")
