@@ -12,47 +12,43 @@ from datetime import datetime
 
 team_id = "3075996"
 header = [
-    "SETOR",
-    "TAREFA",
-    "RESPONSÁVEL",
-    "TEMPO ESTIMADO (h)",
-    "CUSTO ESTIMADO",
-    "TEMPO RASTREADO (h)",
-    "CUSTO REAL",
-    "STATUS",
-    "% CONCLUÍDO",
+    "SETOR", "TAREFA", "RESPONSÁVEL", "TEMPO ESTIMADO (h)", "CUSTO ESTIMADO",
+    "TEMPO RASTREADO (h)", "CUSTO REAL", "STATUS", "% CONCLUÍDO",
 ]
+
 custo_funcionario = {
     "Ana Luiza": 21.93,
     "Anderson Ferreira": 14.41,
     "Bernardo Zampirole Brandão": 29.39,
     "Bianca Aguiar": 20.37,
-    "Dayane Erlacher": 47.64,
+    "Dayane Erlacher": 37.50,
     "Fernando Bisi Vieira": 29.50,
-    "Franco Louzada": 49.75,
+    "Franco Louzada": 37.50,
     "Gabriel da Silva Biancardi": 21.79,
-    "Gabriel Farias": 21.79, #mudar
-    "GUSTAVO FRINHANI": 76.45,
-    "Henrique Loss Lopes": 21.79,
-    "Henrique Puppim": 32.04,
-    "João Fernando Rangel Guimarães": 24.39,
-    "João Pedro Souza Rocha": 29.59,
-    "Mariana Gomes Calheiros": 22.23,
-    "Mateus Ruy Soares Gaudio": 29.39, #mudar
-    "Mauricio Calheiros": 83.57,
-    "Melquisedeque Shaloon Bento da Silva Gomes": 47.64, #mudar
-    "Menno": 75.68,
-    "Michel Carvalho": 34.09,
-    "Pedro Vieira Lopes": 21.23,
+    "Gabriel Farias": 13.30,
+    "GUSTAVO FRINHANI": 62.82,
+    "Henrique Loss Lopes": 13.30,
+    "Henrique Puppim": 35.90,
+    "João Fernando Rangel Guimarães": 21.79,
+    "João Pedro Souza Rocha": 33.45,
+    "Mariana Gomes Calheiros": 21.55,
+    "Mateus Ruy Soares Gaudio": 25.65,
+    "Mauricio Calheiros": 66.82,
+    "Melquisedeque Shaloon Bento da Silva Gomes": 50.37,
+    "Menno": 62.27,
+    "Michel Carvalho": 34.20,
+    "Pedro Vieira Lopes": 19.65,
     "Phelipe Augusto": 36.83,
-    "Rafael Antunes Costa": 29.39, #mudar
+    "Rafael Antunes Costa": 27.19,
     "Rodrigo Merigueti": 33.51,
-    "Waldelicio Junior": 93.43,
+    "Waldelicio Junior": 62.27,
     "Willian Pacheco Silva": 33.46,
-    "Ricardo Calheiros": 109.10
+    "Ricardo Calheiros": 89.55,
+    "Luc Dijkstra": 20.91
 }
+
 data_hoje = datetime.now().strftime("%Y-%m-%d")
-space_exclude = ["90131034562", "90131103749", "90131210570", "90131669969", "90131064862", "90130523790", "90131679449"]
+space_exclude = ["90131034562", "90131103749", "90131210570", "90131669969", "90131064862", "90130523790", "90131679449", "90130182730"]
 # id: 90131034562 nome: Marketing
 # id: 90131103749 nome: Comercial
 # id: 90131210570 nome: Gestão do Conhecimento
@@ -60,16 +56,15 @@ space_exclude = ["90131034562", "90131103749", "90131210570", "90131669969", "90
 # id: 90131064862 nome: Gerente Gustavo
 # id: 90130523790 nome: Gerente Maurício
 # id: 90131679449 nome: Gerente Júnior
+# id: 90130182730 nome: Gerente Dayane
 
 
-folder_exclude = ["90132771240", "90132869998", "90132004295", "90132676002", "90131094720", "90130575812", "90130575784"]
+folder_exclude = ["90132771240", "90132869998", "90132004295", "90132676002", "90131094720"]
 # id: 90132771240 nome: Brain Storm
 # id: 90132869998 nome: Consultoria GSMAS
 # id: 90132004295 nome: Gestão de projetos
 # id: 90132676002 nome: TI
 # id: 90131094720 nome: Tarefas Gerais
-# id: 90130575812 nome: Interno Software
-# id: 90130575784 nome: Suporte Software
 
 # code = "EWOVWCI2APY52Z57XDP79O88R0JS96SY"
 
@@ -101,12 +96,60 @@ response["access_token"] = (
     "3138343_6fada438d889343a074632a34b7c61afcff6e35c1bc63ba13127367756e4d2b2"
 )
 
-headers = {"Authorization": f'Bearer {response["access_token"]}'}
+headers = {"Authorization": f'Bearer {response["access_token"]}', 'Content-Type': 'application/json'}
 
+# Funções Auxiliares
 def obter_dados_api(url):
-    """Função para realizar requisição à API e retornar dados em JSON."""
     response = requests.get(url, headers=headers)
     return response.json() if response.status_code == 200 else None
+
+def calcular_custos(task_name, responsaveis, time_estimate, time_spent):
+    if not responsaveis:
+        if time_estimate != 0 or time_spent != 0:
+            print(f"Tarefa sem responsável - {task_name}")
+        return 0, 0
+
+    custo = sum(custo_funcionario.get(nome.strip(), 0) for nome in responsaveis.split(";"))
+    return time_estimate * custo, time_spent * custo
+
+
+def processar_tarefa(tarefa, aba, prefixo=""):
+    responsaveis = ";".join(assignee["username"] for assignee in tarefa["assignees"])
+    time_estimate = float(tarefa.get("time_estimate", 0) or 0) / 3600000
+    time_spent = float(tarefa.get("time_spent", 0) or 0) / 3600000
+    cost_estimate, cost_spent = calcular_custos(tarefa["name"], responsaveis, time_estimate, time_spent)
+    status = tarefa["status"]["status"]
+    percent_concluido = 1 if task["status"]["status"].lower() in {"concluídas", "fechadas"} else 0
+
+    aba.append([
+        tarefa["list"]["name"], f"{prefixo} {tarefa['name']}", responsaveis, time_estimate,
+        cost_estimate, time_spent, cost_spent, status, percent_concluido
+    ])
+
+    detail_task = obter_dados_api(f"https://api.clickup.com/api/v2/task/{task['id']}?custom_task_ids=true&include_subtasks=true&include_markdown_description=true&custom_fields=string")
+
+    return detail_task.get("subtasks", [])
+
+def processar_subtarefas(name_tarefa, tarefa, aba, prefixo=""):
+    responsaveis = ";".join(assignee["username"] for assignee in tarefa["assignees"])
+    time_estimate = float(tarefa.get("time_estimate", 0) or 0) / 3600000
+    time_spent = float(tarefa.get("time_spent", 0) or 0) / 3600000
+    cost_estimate, cost_spent = calcular_custos(tarefa["name"], responsaveis, time_estimate, time_spent)
+    status = tarefa["status"]["status"]
+
+    aba.append([
+        name_tarefa, f"{prefixo} {tarefa['name']}", responsaveis, time_estimate,
+        cost_estimate, time_spent, cost_spent, status, ""
+    ])
+
+    if prefixo.count(".") == 4:
+        return []
+    
+    detail_task = obter_dados_api(f"https://api.clickup.com/api/v2/task/{tarefa['id']}?custom_task_ids=true&include_subtasks=true&include_markdown_description=true&custom_fields=string")
+    if detail_task:
+        return detail_task.get("subtasks", [])
+    
+    return []
 
 try:
     spaces = obter_dados_api(f"https://api.clickup.com/api/v2/team/{team_id}/space?archived=false")["spaces"]
@@ -127,48 +170,31 @@ try:
             caminho_arquivo = f"./Projetos/{space["name"]}_{folder["name"]}.xlsx"
             print(caminho_arquivo)
             workbook = load_workbook(caminho_arquivo)
-            # Seleciona a aba "Tarefas Gerais"
             if "Tarefas Gerais" in workbook.sheetnames:
                 aba = workbook["Tarefas Gerais"]
             else:
                 raise ValueError("A aba 'Tarefas Gerais' não existe na planilha.")
 
+            # Limpa a aba e insere cabeçalho
             aba.delete_rows(1, aba.max_row)
             aba.append(header)
 
-            
-            lists = obter_dados_api(f"https://api.clickup.com/api/v2/folder/{folder['id']}/list?archived=false")["lists"]
-            if not lists:
-                print("lists vazio")
-                continue
-
+            # Obtém listas e processa tarefas
+            lists = obter_dados_api(f"https://api.clickup.com/api/v2/folder/{folder["id"]}/list?archived=false")["lists"]
             for lista in lists:
-                tasks = obter_dados_api(f"https://api.clickup.com/api/v2/list/{lista['id']}/task?archived=false&include_closed=true")["tasks"]
-                if not tasks:
-                    print("tasks vazio")
-                    continue
-                
-                for task in tasks:
-                    responsaveis = ";".join(assignee["username"] for assignee in task["assignees"])
-                    custos_presentes = [custo_funcionario.get(nome, 0) for nome in responsaveis.split(";")]
-                    custo = max(custos_presentes, default=0)
-                    # custo = 0
-                    # custo += sum(custo_funcionario.get(nome, 0) for nome in responsaveis.split(";"))
-                    if custo == 0:
-                        print(f"custo 0: {folder['name']} - {responsaveis}")
-                    time_estimate = (task.get("time_estimate") or 0) / 3600000
-                    cost_estimate = time_estimate * custo
-                    time_spent = task.get("time_spent", 0) / 3600000
-                    cost_spent = time_spent * custo
-                    percent_concluido = 1 if task["status"]["status"].lower() in {"concluídas", "fechadas"} else 0
+                tasks = obter_dados_api(f"https://api.clickup.com/api/v2/list/{lista['id']}/task?include_closed=true")["tasks"]
+                for idx, task in enumerate(tasks, start=1):
+                    subtasks = processar_tarefa(task, aba, f"{idx}")
+                    for sub_idx, subtask in enumerate(subtasks, start=1):
+                        subtask2 = processar_subtarefas(task["list"]["name"], subtask, aba, f"{idx}.{sub_idx}.")
+                        for sub2_idx, subtask2 in enumerate(subtask2, start=1):
+                            subtask3 = processar_subtarefas(task["list"]["name"], subtask2, aba, f"{idx}.{sub_idx}.{sub2_idx}.")
+                            for sub3_idx, subtask3 in enumerate(subtask3, start=1):
+                                processar_subtarefas(task["list"]["name"], subtask3, aba, f"{idx}.{sub_idx}.{sub2_idx}.{sub3_idx}.")
 
-                    # Adiciona os dados da tarefa à planilha
-                    aba.append([
-                        task["list"]["name"], task["name"], responsaveis,
-                        time_estimate, cost_estimate, time_spent,
-                        cost_spent, task["status"]["status"], percent_concluido
-                    ])
             workbook.save(caminho_arquivo)
+            # break
+        # break
 
 except requests.RequestException as e:
     print(f"Erro de requisição: {e}")
