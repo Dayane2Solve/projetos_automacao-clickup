@@ -101,12 +101,12 @@ headers = {"Authorization": f'Bearer {response["access_token"]}', 'Content-Type'
 # Funções Auxiliares
 def obter_dados_api(url):
     response = requests.get(url, headers=headers)
-    return response.json() if response.status_code == 200 else None
+    return response.json() if response.status_code == 200 else []
 
 def calcular_custos(task_name, responsaveis, time_estimate, time_spent):
     if not responsaveis:
-        if time_estimate != 0 or time_spent != 0:
-            print(f"Tarefa sem responsável - {task_name}")
+        # if time_estimate != 0 or time_spent != 0:
+        #     print(f"Tarefa sem responsável - {task_name}")
         return 0, 0
 
     custo = sum(custo_funcionario.get(nome.strip(), 0) for nome in responsaveis.split(";"))
@@ -119,7 +119,7 @@ def processar_tarefa(tarefa, aba, prefixo=""):
     time_spent = float(tarefa.get("time_spent", 0) or 0) / 3600000
     cost_estimate, cost_spent = calcular_custos(tarefa["name"], responsaveis, time_estimate, time_spent)
     status = tarefa["status"]["status"]
-    percent_concluido = 1 if task["status"]["status"].lower() in {"concluídas", "fechadas"} else 0
+    percent_concluido = 1 if status.lower() in {"concluídas", "fechadas"} else 0
 
     aba.append([
         tarefa["list"]["name"], f"{prefixo} {tarefa['name']}", responsaveis, time_estimate,
@@ -136,20 +136,20 @@ def processar_subtarefas(name_tarefa, tarefa, aba, prefixo=""):
     time_spent = float(tarefa.get("time_spent", 0) or 0) / 3600000
     cost_estimate, cost_spent = calcular_custos(tarefa["name"], responsaveis, time_estimate, time_spent)
     status = tarefa["status"]["status"]
+    percent_concluido = 1 if status.lower() in {"concluídas", "fechadas"} else 0
 
     aba.append([
         name_tarefa, f"{prefixo} {tarefa['name']}", responsaveis, time_estimate,
-        cost_estimate, time_spent, cost_spent, status, ""
+        cost_estimate, time_spent, cost_spent, status, percent_concluido
     ])
 
     if prefixo.count(".") == 4:
         return []
     
     detail_task = obter_dados_api(f"https://api.clickup.com/api/v2/task/{tarefa['id']}?custom_task_ids=true&include_subtasks=true&include_markdown_description=true&custom_fields=string")
-    if detail_task:
-        return detail_task.get("subtasks", [])
     
-    return []
+    return detail_task.get("subtasks", [])  
+
 
 try:
     spaces = obter_dados_api(f"https://api.clickup.com/api/v2/team/{team_id}/space?archived=false")["spaces"]
